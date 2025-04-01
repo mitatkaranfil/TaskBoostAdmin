@@ -101,10 +101,16 @@ app.use((req, res, next) => {
     }
 
     // start the server
-    const PORT = process.env.PORT || 3001;
-    server.listen(Number(PORT), '0.0.0.0', () => {
-      console.log(`Server running at http://0.0.0.0:${PORT}`);
-    });
+    const PORT = process.env.PORT || 8080;
+    console.log(`Port değişkeni: ${PORT}, process.env.PORT: ${process.env.PORT}`);
+    
+    try {
+      server.listen(Number(PORT), '0.0.0.0', () => {
+        console.log(`Server running at http://0.0.0.0:${PORT}`);
+      });
+    } catch (error) {
+      console.error('Server dinleme hatası:', error);
+    }
 
     return server;
 
