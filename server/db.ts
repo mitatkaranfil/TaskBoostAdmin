@@ -12,7 +12,7 @@ console.log("User:", process.env.DB_USER);
 console.log("DATABASE_URL:", process.env.DATABASE_URL ? "Ayarlanmış" : "Ayarlanmamış");
 
 // Railway bağlantı URL'si
-const DATABASE_URL = 'postgresql://postgres:YlKAZqJYqlXRJxRKqOgTMrSVbglXFSax@centerbeam.proxy.rlwy.net:18121/railway';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:YlKAZqJYqlXRJxRKqOgTMrSVbglXFSax@centerbeam.proxy.rlwy.net:18121/railway';
 
 // Varsayılan boş bir pool oluştur
 let pool: pkg.Pool;
