@@ -1,11 +1,14 @@
 [phases.setup]
-nixPackages = ['nodejs_20', 'npm-10_x', 'openssl']
+nixPackages = ['nodejs_20', 'npm-10_x', 'openssl', 'postgresql']
 
 [phases.install]
 cmds = ['npm install --legacy-peer-deps']
 
 [phases.build]
 cmds = ['npm run build']
+
+[env]
+DATABASE_URL = "your-railway-postgresql-url"
 
 [start]
 cmd = 'node dist/index.js'
