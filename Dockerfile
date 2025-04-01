@@ -1,21 +1,17 @@
-FROM node:20-alpine
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Yarn kurulumu
-RUN apk add --no-cache yarn
-
-# Sadece package.json dosyasını kopyala
 COPY package.json ./
 
-# Yarn ile paketleri kur
-RUN yarn install
+# Önce prodüksiyon paketlerini kuralım
+RUN npm install --only=production --no-package-lock
 
-# Tüm projeyi kopyala
+# Sonra dev bağımlılıklarını kuralım
+RUN npm install --only=dev --no-package-lock
+
 COPY . .
-
-# Build işlemini yap
-RUN yarn build
+RUN npm run build
 
 ENV NODE_ENV=production
 ENV PORT=3001
@@ -23,3 +19,5 @@ ENV PORT=3001
 EXPOSE 3001
 
 CMD ["node", "dist/index.js"]
+
+
