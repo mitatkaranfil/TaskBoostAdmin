@@ -2,19 +2,20 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm config set legacy-peer-deps true
-# Temel paketleri kur
-RUN npm install express pg drizzle-orm
-# React ve ilgili paketleri kur
-RUN npm install react react-dom react-router-dom
-# UI paketlerini kur
-RUN npm install @radix-ui/react-* lucide-react tailwind-merge
-# Kalan paketleri kur
-RUN npm install
+# Yarn kurulumu
+RUN apk add --no-cache yarn
 
+# Sadece package.json dosyasını kopyala
+COPY package.json ./
+
+# Yarn ile paketleri kur
+RUN yarn install
+
+# Tüm projeyi kopyala
 COPY . .
-RUN npm run build
+
+# Build işlemini yap
+RUN yarn build
 
 ENV NODE_ENV=production
 ENV PORT=3001
