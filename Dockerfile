@@ -1,13 +1,10 @@
 FROM node:18.18.2-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
 # Install dependencies
-RUN npm install --only=production
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
 
 # Copy source files
 COPY . .
@@ -15,8 +12,8 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Expose the port
+# Expose the port the app runs on
 EXPOSE 3000
 
-# Start the server
-CMD ["node", "dist/index.js"]
+# Start the application
+CMD ["npm", "start"]
