@@ -11,35 +11,22 @@ console.log("Port:", process.env.DB_PORT);
 console.log("User:", process.env.DB_USER);
 console.log("DATABASE_URL:", process.env.DATABASE_URL ? "Ayarlanmış" : "Ayarlanmamış");
 
+// Railway bağlantı URL'si
+const DATABASE_URL = 'postgresql://postgres:YlKAZqJYqlXRJxRKqOgTMrSVbglXFSax@centerbeam.proxy.rlwy.net:18121/railway';
+
 // Varsayılan boş bir pool oluştur
 let pool: pkg.Pool;
 
 // Railway ve diğer hosting platformları için DATABASE_URL değişkenini kontrol et
 try {
-  if (process.env.DATABASE_URL) {
-    console.log("DATABASE_URL kullanılıyor");
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false
-      }
-    });
-    console.log("DATABASE_URL ile veritabanı havuzu oluşturuldu");
-  } else {
-    // Yerel geliştirme ortamı için ayrı değişkenleri kullan
-    console.log("Yerel değişkenler kullanılıyor");
-    pool = new Pool({
-      host: process.env.DB_HOST,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
-      port: parseInt(process.env.DB_PORT || '5432'),
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-    });
-    console.log("Yerel değişkenlerle veritabanı havuzu oluşturuldu");
-  }
+  console.log("DATABASE_URL kullanılıyor");
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+  console.log("DATABASE_URL ile veritabanı havuzu oluşturuldu");
 
   // Bağlantıyı test et
   pool.query('SELECT NOW()', (err, res) => {
@@ -63,4 +50,4 @@ try {
   });
 }
 
-export default pool; 
+export default pool;

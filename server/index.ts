@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { PostgresStorage } from "./postgres";
+import { runMigrations } from "./migrations";
 
 // Initialize PostgreSQL storage
 export const storage = new PostgresStorage();
@@ -65,6 +66,13 @@ app.use((req, res, next) => {
 
 (async () => {
   try {
+    // Migrations çalıştır
+    const migrationsSuccess = await runMigrations();
+    if (!migrationsSuccess) {
+      console.error('Migrations başarısız oldu. Uygulama başlatılamıyor.');
+      process.exit(1);
+    }
+
     const server = await registerRoutes(app);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
