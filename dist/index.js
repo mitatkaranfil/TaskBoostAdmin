@@ -1704,7 +1704,8 @@ var PostgresStorage = class {
       const weeklyTasksResult = await db_default.query(
         "SELECT id FROM tasks WHERE type = 'weekly' AND is_active = true"
       );
-      if (weeklyTasksResult.rows.length === 0) return 0;
+      if (weeklyTasksResult.rows.length === 0)
+        return 0;
       const weeklyTaskIds = weeklyTasksResult.rows.map((row) => row.id);
       const resetResult = await db_default.query(
         `UPDATE user_tasks SET 
