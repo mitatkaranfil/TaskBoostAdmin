@@ -1,7 +1,89 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Task, BoostType } from '@/types';
-import { getAllTasks, createTask, updateTask, deleteTask, getAllBoostTypes, createBoostType, updateBoostType, deleteBoostType } from '@/lib/supabase';
+import { API_BASE_URL } from '@/lib/constants';
+
+const fetchTasks = async () => {
+  const response = await fetch(`${API_BASE_URL}/tasks`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch tasks');
+  }
+  return await response.json();
+};
+
+const createTask = async (task: Partial<Task>) => {
+  const response = await fetch(`${API_BASE_URL}/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(task),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to create task');
+  }
+  return await response.json();
+};
+
+const updateTask = async (taskId: string, updatedTask: Partial<Task>) => {
+  const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedTask),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update task');
+  }
+  return await response.json();
+};
+
+const deleteTask = async (taskId: string) => {
+  const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete task');
+  }
+};
+
+const fetchBoosts = async () => {
+  const response = await fetch(`${API_BASE_URL}/boosts`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch boosts');
+  }
+  return await response.json();
+};
+
+const createBoostType = async (boost: Partial<BoostType>) => {
+  const response = await fetch(`${API_BASE_URL}/boosts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(boost),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to create boost');
+  }
+  return await response.json();
+};
+
+const updateBoostType = async (boostId: string, updatedBoost: Partial<BoostType>) => {
+  const response = await fetch(`${API_BASE_URL}/boosts/${boostId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updatedBoost),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update boost');
+  }
+  return await response.json();
+};
+
+const deleteBoostType = async (boostId: string) => {
+  const response = await fetch(`${API_BASE_URL}/boosts/${boostId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to delete boost');
+  }
+};
 
 export default function Admin() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -39,7 +121,7 @@ export default function Admin() {
   
   const loadTasks = async () => {
     try {
-      const tasks = await getAllTasks();
+      const tasks = await fetchTasks();
       setTasks(tasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
@@ -53,7 +135,7 @@ export default function Admin() {
 
   const loadBoosts = async () => {
     try {
-      const boosts = await getAllBoostTypes();
+      const boosts = await fetchBoosts();
       setBoosts(boosts);
     } catch (error) {
       console.error('Error loading boosts:', error);

@@ -1,9 +1,50 @@
-import { useState, useEffect } from "react";
-import { getTasks, getUserTasks, updateUserTaskProgress, incrementUserTaskProgress } from "@/lib/supabase";
-import { Task, UserTask, TaskFilter } from "@/types";
+import { useState, useEffect } from 'react';
+import { Task, UserTask, TaskFilter } from '@/types';
+import { API_BASE_URL } from '@/lib/constants';
 import useUser from "./useUser";
 import { useToast } from "@/hooks/use-toast";
 import { openTelegramLink, hapticFeedback } from "@/lib/telegram";
+
+// API çağrıları
+async function getTasks(): Promise<Task[]> {
+  const response = await fetch(`${API_BASE_URL}/tasks`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch tasks');
+  }
+  return await response.json();
+}
+
+async function getUserTasks(userId: string): Promise<UserTask[]> {
+  const response = await fetch(`${API_BASE_URL}/users/${userId}/tasks`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch user tasks');
+  }
+  return await response.json();
+}
+
+async function updateUserTaskProgress(userId: string, taskId: string, progress: number): Promise<UserTask> {
+  const response = await fetch(`${API_BASE_URL}/users/${userId}/tasks/${taskId}/progress`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ progress }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update task progress');
+  }
+  return await response.json();
+}
+
+async function incrementUserTaskProgress(userId: string, taskId: string, amount: number = 1): Promise<UserTask> {
+  const response = await fetch(`${API_BASE_URL}/users/${userId}/tasks/${taskId}/increment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to increment task progress');
+  }
+  return await response.json();
+}
 
 export const useTasks = () => {
   const { user, refreshUser } = useUser();
@@ -26,35 +67,13 @@ export const useTasks = () => {
     try {
       setIsLoading(true);
       
-      // Get all tasks from Supabase
-      try {
-        console.log("Loading tasks from Supabase");
-        const tasksData = await getTasks();
-        console.log("Tasks loaded from Supabase:", tasksData);
-        setTasks(tasksData);
-      } catch (error) {
-        console.error("Error loading tasks from Supabase:", error);
-        toast({
-          title: "Hata",
-          description: "Görevler yüklenirken bir hata oluştu.",
-          variant: "destructive"
-        });
-      }
+      // Get all tasks from API
+      const tasksData = await getTasks();
+      setTasks(tasksData);
       
       // Get user's progress on tasks
-      try {
-        console.log("Loading user tasks from Supabase");
-        const userTasksData = await getUserTasks(user.id);
-        console.log("User tasks loaded from Supabase:", userTasksData);
-        setUserTasks(userTasksData);
-      } catch (error) {
-        console.error("Error loading user tasks from Supabase:", error);
-        toast({
-          title: "Hata",
-          description: "Kullanıcı görevleri yüklenirken bir hata oluştu.",
-          variant: "destructive"
-        });
-      }
+      const userTasksData = await getUserTasks(user.id);
+      setUserTasks(userTasksData);
       
     } catch (error) {
       console.error("Error loading tasks:", error);
@@ -170,7 +189,7 @@ export const useTasks = () => {
           try {
             console.log("Handling progress-based task");
             // Bir birim ilerleme kaydedelim
-            const result = await incrementTaskProgress(parseInt(task.id, 10), 1);
+            const result = await incrementUserTaskProgress(user.id, task.id, 1);
             console.log("Task progress result:", result);
             toast({
               title: "İlerleme Kaydedildi",

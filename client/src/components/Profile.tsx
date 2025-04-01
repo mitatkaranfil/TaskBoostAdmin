@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from "react";
 import useUser from "@/hooks/useUser";
-import { getReferrals } from "@/lib/supabase";
 import { formatDate, formatPoints, formatTimeSinceJoin } from "@/lib/mining";
 import { Referral } from "@/types";
 import { shareWithTelegram, showAlert, hapticFeedback } from "@/lib/telegram";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { API_BASE_URL } from '@/lib/constants';
+
+// API çağrıları
+async function getUserReferrals(userId: string): Promise<Referral[]> {
+  const response = await fetch(`${API_BASE_URL}/users/${userId}/referrals`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch user referrals');
+  }
+  return await response.json();
+}
 
 const Profile: React.FC = () => {
   const { user, currentMiningSpeed } = useUser();
@@ -19,7 +28,7 @@ const Profile: React.FC = () => {
       
       try {
         setIsLoading(true);
-        const referralsData = await getReferrals(user.id);
+        const referralsData = await getUserReferrals(user.id);
         setReferrals(referralsData);
       } catch (error) {
         console.error("Error loading referrals:", error);

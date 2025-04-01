@@ -15,27 +15,35 @@ console.log("Host:", process.env.DB_HOST);
 console.log("Database:", process.env.DB_NAME);
 console.log("Port:", process.env.DB_PORT);
 console.log("User:", process.env.DB_USER);
-console.log("URL:", process.env.DATABASE_URL);
-var pool = new Pool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: parseInt(process.env.DB_PORT || "5432"),
-  max: 20,
-  idleTimeoutMillis: 3e4,
-  connectionTimeoutMillis: 5e3
-});
-pool.query("SELECT NOW()", (err, res) => {
-  if (err) {
-    console.error("Veritaban\u0131 ba\u011Flant\u0131 hatas\u0131:", err);
-  } else {
-    console.log("Veritaban\u0131 ba\u011Flant\u0131s\u0131 ba\u015Far\u0131l\u0131:", res.rows[0]);
-  }
-});
-pool.on("error", (err) => {
-  console.error("Veritaban\u0131 havuzu hatas\u0131:", err);
-});
+console.log("DATABASE_URL:", process.env.DATABASE_URL ? "Ayarlanm\u0131\u015F" : "Ayarlanmam\u0131\u015F");
+var DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:YlKAZqJYqlXRJxRKqOgTMrSVbglXFSax@centerbeam.proxy.rlwy.net:18121/railway";
+var pool;
+try {
+  console.log("DATABASE_URL kullan\u0131l\u0131yor");
+  pool = new Pool({
+    connectionString: DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+  console.log("DATABASE_URL ile veritaban\u0131 havuzu olu\u015Fturuldu");
+  pool.query("SELECT NOW()", (err, res) => {
+    if (err) {
+      console.error("Veritaban\u0131 ba\u011Flant\u0131 hatas\u0131:", err);
+    } else {
+      console.log("Veritaban\u0131 ba\u011Flant\u0131s\u0131 ba\u015Far\u0131l\u0131:", res.rows[0]);
+    }
+  });
+  pool.on("error", (err) => {
+    console.error("Veritaban\u0131 havuzu hatas\u0131:", err);
+  });
+} catch (error) {
+  console.error("Veritaban\u0131 havuzu olu\u015Fturma hatas\u0131:", error);
+  pool = new Pool({
+    // Boş bir havuz
+    max: 1
+  });
+}
 var db_default = pool;
 
 // shared/schema.ts
@@ -680,23 +688,12 @@ import { createServer as createViteServer, createLogger } from "vite";
 // vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import themePlugin from "@replit/vite-plugin-shadcn-theme-json";
 import path, { dirname } from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { fileURLToPath } from "url";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = dirname(__filename);
 var vite_config_default = defineConfig({
-  plugins: [
-    react(),
-    runtimeErrorOverlay(),
-    themePlugin(),
-    ...process.env.NODE_ENV !== "production" && process.env.REPL_ID !== void 0 ? [
-      await import("@replit/vite-plugin-cartographer").then(
-        (m) => m.cartographer()
-      )
-    ] : []
-  ],
+  plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "client", "src"),
@@ -1707,7 +1704,8 @@ var PostgresStorage = class {
       const weeklyTasksResult = await db_default.query(
         "SELECT id FROM tasks WHERE type = 'weekly' AND is_active = true"
       );
-      if (weeklyTasksResult.rows.length === 0) return 0;
+      if (weeklyTasksResult.rows.length === 0)
+        return 0;
       const weeklyTaskIds = weeklyTasksResult.rows.map((row) => row.id);
       const resetResult = await db_default.query(
         `UPDATE user_tasks SET 
@@ -1725,8 +1723,139 @@ var PostgresStorage = class {
   }
 };
 
+// server/migrations/index.ts
+var sqlContent = `-- Users tablosu
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    telegram_id VARCHAR(50) UNIQUE NOT NULL,
+    username VARCHAR(255),
+    first_name VARCHAR(255),
+    last_name VARCHAR(255),
+    photo_url TEXT,
+    referral_code VARCHAR(50),
+    referred_by INTEGER REFERENCES users(id),
+    level INTEGER DEFAULT 1,
+    points INTEGER DEFAULT 0,
+    mining_speed INTEGER DEFAULT 10,
+    last_mining_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_tasks_count INTEGER DEFAULT 0,
+    boost_usage_count INTEGER DEFAULT 0,
+    join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tasks tablosu
+CREATE TABLE IF NOT EXISTS tasks (
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    points INTEGER NOT NULL,
+    duration INTEGER NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Boost Types tablosu
+CREATE TABLE IF NOT EXISTS boost_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    duration INTEGER NOT NULL,
+    points_cost INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User Boosts tablosu
+CREATE TABLE IF NOT EXISTS user_boosts (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    boost_type_id INTEGER REFERENCES boost_types(id),
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User Tasks tablosu
+CREATE TABLE IF NOT EXISTS user_tasks (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP,
+    status VARCHAR(50) NOT NULL,
+    points_earned INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Referrals tablosu
+CREATE TABLE IF NOT EXISTS referrals (
+    id SERIAL PRIMARY KEY,
+    referrer_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    referred_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Trigger fonksiyonu ve trigger'lar
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_tasks_updated_at
+    BEFORE UPDATE ON tasks
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_boost_types_updated_at
+    BEFORE UPDATE ON boost_types
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_user_boosts_updated_at
+    BEFORE UPDATE ON user_boosts
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_user_tasks_updated_at
+    BEFORE UPDATE ON user_tasks
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_referrals_updated_at
+    BEFORE UPDATE ON referrals
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();`;
+async function runMigrations() {
+  try {
+    console.log("Migrations ba\u015Flat\u0131l\u0131yor...");
+    await db_default.query(sqlContent);
+    console.log("Migrations ba\u015Far\u0131yla tamamland\u0131!");
+    return true;
+  } catch (error) {
+    console.error("Migration hatas\u0131:", error);
+    return false;
+  }
+}
+
 // server/index.ts
-var storage = new PostgresStorage();
+var storage = new PostgresStorage({
+  connectionString: process.env.DATABASE_URL
+});
 var app = express2();
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -1772,6 +1901,11 @@ app.use((req, res, next) => {
 });
 (async () => {
   try {
+    const migrationsSuccess = await runMigrations();
+    if (!migrationsSuccess) {
+      console.error("Migrations ba\u015Far\u0131s\u0131z oldu. Uygulama ba\u015Flat\u0131lam\u0131yor.");
+      process.exit(1);
+    }
     const server = await registerRoutes(app);
     app.use((err, _req, res, _next) => {
       const status = err.status || err.statusCode || 500;
@@ -1795,10 +1929,15 @@ app.use((req, res, next) => {
     if (process.env.NODE_ENV === "development") {
       app.use(serveStatic);
     }
-    const PORT = process.env.SERVER_PORT || process.env.PORT || 3001;
-    server.listen(PORT, () => {
-      console.log(`Server running at http://localhost:${PORT}`);
-    });
+    const PORT = process.env.PORT || 8080;
+    console.log(`Port de\u011Fi\u015Fkeni: ${PORT}, process.env.PORT: ${process.env.PORT}`);
+    try {
+      server.listen(Number(PORT), "0.0.0.0", () => {
+        console.log(`Server running at http://0.0.0.0:${PORT}`);
+      });
+    } catch (error) {
+      console.error("Server dinleme hatas\u0131:", error);
+    }
     return server;
   } catch (error) {
     console.error("Server startup error:", error);

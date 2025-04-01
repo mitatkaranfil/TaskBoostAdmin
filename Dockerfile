@@ -1,23 +1,22 @@
 FROM node:18-alpine
 
+# Set working directory
 WORKDIR /app
 
-COPY package.json ./
+# Copy package files
+COPY package*.json ./
 
-# Önce prodüksiyon paketlerini kuralım
-RUN npm install --only=production --no-package-lock
+# Install dependencies
+RUN npm install
 
-# Sonra dev bağımlılıklarını kuralım
-RUN npm install --only=dev --no-package-lock
-
+# Copy source files
 COPY . .
+
+# Build the application
 RUN npm run build
 
-ENV NODE_ENV=production
-ENV PORT=3001
+# Expose the port
+EXPOSE 3000
 
-EXPOSE 3001
-
+# Start the server
 CMD ["node", "dist/index.js"]
-
-

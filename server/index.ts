@@ -5,7 +5,9 @@ import { PostgresStorage } from "./postgres";
 import { runMigrations } from "./migrations";
 
 // Initialize PostgreSQL storage
-export const storage = new PostgresStorage();
+export const storage = new PostgresStorage({
+  connectionString: process.env.DATABASE_URL,
+});
 
 const app = express();
 

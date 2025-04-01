@@ -1,11 +1,27 @@
 import { createContext, useState, useEffect, ReactNode } from "react";
 import { User, UserBoost } from "@/types";
 import { authenticateTelegramUser } from "@/lib/telegram";
-import { getUserBoosts, getUserByTelegramId } from "@/lib/supabase";
 import { calculateMiningSpeed, isMiningAvailable } from "@/lib/mining";
 import LoadingScreen from "@/components/LoadingScreen";
 
 const API_BASE_URL = '/api';
+
+// API çağrıları
+async function getUserBoosts(userId: string): Promise<UserBoost[]> {
+  const response = await fetch(`${API_BASE_URL}/users/${userId}/boosts`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch user boosts');
+  }
+  return await response.json();
+}
+
+async function getUserByTelegramId(telegramId: string): Promise<User | null> {
+  const response = await fetch(`${API_BASE_URL}/users/telegram/${telegramId}`);
+  if (!response.ok) {
+    return null;
+  }
+  return await response.json();
+}
 
 interface UserContextType {
   user: User | null;
