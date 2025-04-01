@@ -11,16 +11,29 @@ console.log("Port:", process.env.DB_PORT);
 console.log("User:", process.env.DB_USER);
 console.log("URL:", process.env.DATABASE_URL);
 
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: parseInt(process.env.DB_PORT || '5432'),
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
+let pool;
+
+// Railway ve diğer hosting platformları için DATABASE_URL değişkenini kontrol et
+if (process.env.DATABASE_URL) {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+} else {
+  // Yerel geliştirme ortamı için ayrı değişkenleri kullan
+  pool = new Pool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: parseInt(process.env.DB_PORT || '5432'),
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
+}
 
 // Bağlantıyı test et
 pool.query('SELECT NOW()', (err, res) => {
