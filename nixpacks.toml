@@ -8,7 +8,7 @@ cmds = ['npm install --legacy-peer-deps']
 cmds = ['npm run build']
 
 [env]
-DATABASE_URL = "your-railway-postgresql-url"
+DATABASE_URL = "postgresql://postgres:YlKAZqJYqlXRJxRKqOgTMrSVbglXFSax@centerbeam.proxy.rlwy.net:18121/railway"
 
 [start]
 cmd = 'node dist/index.js'
