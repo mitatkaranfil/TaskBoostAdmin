@@ -101,9 +101,9 @@ app.use((req, res, next) => {
     }
 
     // start the server
-    const PORT = process.env.SERVER_PORT || process.env.PORT || 3001;
-    server.listen(PORT, () => {
-      console.log(`Server running at http://localhost:${PORT}`);
+    const PORT = process.env.PORT || 3001;
+    server.listen(Number(PORT), '0.0.0.0', () => {
+      console.log(`Server running at http://0.0.0.0:${PORT}`);
     });
 
     return server;
