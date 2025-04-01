@@ -1,9 +1,11 @@
 import { createContext, useState, useEffect, ReactNode } from "react";
 import { User, UserBoost } from "@/types";
 import { authenticateTelegramUser } from "@/lib/telegram";
-import { getUserActiveBoosts, updateUserLastMiningTime, updateUserPoints } from "@/lib/firebase";
+import { getUserBoosts, getUserByTelegramId } from "@/lib/supabase";
 import { calculateMiningSpeed, isMiningAvailable } from "@/lib/mining";
 import LoadingScreen from "@/components/LoadingScreen";
+
+const API_BASE_URL = '/api';
 
 interface UserContextType {
   user: User | null;
@@ -54,12 +56,10 @@ export const UserProvider = ({ children }: UserProviderProps) => {
         if (!authenticatedUser) {
           console.error("UserContext - Authentication returned null user");
           
-          // If we failed to authenticate but have made less than 3 attempts,
-          // we'll try again in a moment (to give Telegram WebApp time to initialize)
           if (initAttempts < 3) {
             console.log(`UserContext - Retrying authentication (attempt ${initAttempts + 1}/3)`);
             setInitAttempts(prev => prev + 1);
-            return; // Exit without setting isLoading to false
+            return;
           }
           
           throw new Error("Authentication failed after multiple attempts");
@@ -72,7 +72,7 @@ export const UserProvider = ({ children }: UserProviderProps) => {
         if (authenticatedUser.id) {
           console.log("UserContext - Loading boosts for user:", authenticatedUser.id);
           try {
-            const boosts = await getUserActiveBoosts(authenticatedUser.id);
+            const boosts = await getUserBoosts(authenticatedUser.id);
             console.log("UserContext - Loaded boosts:", boosts.length);
             setActiveBoosts(boosts);
           } catch (boostErr) {
@@ -101,7 +101,7 @@ export const UserProvider = ({ children }: UserProviderProps) => {
     };
 
     initUser();
-  }, [initAttempts]); // Re-run when initAttempts changes
+  }, [initAttempts]);
 
   // Check for mining rewards
   const claimMiningRewards = async (userToUpdate = user): Promise<boolean> => {
@@ -131,11 +131,21 @@ export const UserProvider = ({ children }: UserProviderProps) => {
       // Calculate earned points
       const earnedPoints = hoursDiff * miningSpeed;
       
-      // Update points in Firebase
-      await updateUserPoints(userToUpdate.id, earnedPoints);
+      // Update points and last mining time via API
+      const response = await fetch(`${API_BASE_URL}/users/${userToUpdate.id}/mining-claim`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          earnedPoints,
+          miningTime: new Date().toISOString()
+        }),
+      });
       
-      // Update last mining time
-      await updateUserLastMiningTime(userToUpdate.id);
+      if (!response.ok) {
+        throw new Error('Failed to update mining rewards');
+      }
       
       // Refresh user
       await refreshUser();
@@ -154,8 +164,8 @@ export const UserProvider = ({ children }: UserProviderProps) => {
     try {
       setIsLoading(true);
       
-      // Re-authenticate to get fresh user data
-      const refreshedUser = await authenticateTelegramUser();
+      // Get fresh user data from API
+      const refreshedUser = await getUserByTelegramId(user.telegramId);
       
       if (!refreshedUser) {
         throw new Error("Failed to refresh user");
@@ -165,7 +175,7 @@ export const UserProvider = ({ children }: UserProviderProps) => {
       
       // Refresh active boosts
       if (refreshedUser.id) {
-        const boosts = await getUserActiveBoosts(refreshedUser.id);
+        const boosts = await getUserBoosts(refreshedUser.id);
         setActiveBoosts(boosts);
       }
       

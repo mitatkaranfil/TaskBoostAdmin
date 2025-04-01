@@ -1,6 +1,7 @@
 import express, { type Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage } from "./index";
+import pool from "./db";
 import { 
   insertUserSchema, 
   insertTaskSchema, 
@@ -38,14 +39,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.body.telegramId === "123456789") {
         console.log("Creating test user with data:", JSON.stringify(req.body));
         
-        // Skip validation for test user
-        const user = {
-          id: 1,
+        // Create test user in the database
+        const testUserData = {
           telegramId: "123456789",
           firstName: "Test",
           lastName: "User",
           username: "testuser",
-          photoUrl: "https://via.placeholder.com/100",
+          photoUrl: "https://ui-avatars.com/api/?name=Test+User&background=random",
           referralCode: "TEST123",
           level: 1,
           points: 0,
@@ -56,7 +56,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           boostUsageCount: 0
         };
         
-        console.log("Test user created:", JSON.stringify(user));
+        // Delete the existing test user if it exists (to avoid conflicts)
+        try {
+          await pool.query('DELETE FROM users WHERE telegram_id = $1', ["123456789"]);
+        } catch (deleteError) {
+          console.log("No existing test user to delete or error deleting:", deleteError);
+        }
+        
+        // Insert the test user into the database
+        const user = await storage.createUser(testUserData);
+        
+        console.log("Test user created in database:", JSON.stringify(user));
         return res.status(201).json(user);
       } else {
         // Regular validation for real users
@@ -462,11 +472,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin Route for Task Management
   router.get("/admin/tasks", async (req, res) => {
     try {
-      const allTasks = await storage.getTasks();
-      res.json(allTasks);
+      const tasks = await storage.getTasks();
+      res.json(tasks);
     } catch (error) {
-      console.error("Error fetching all tasks for admin:", error);
-      res.status(500).json({ message: "Error fetching tasks" });
+      console.error("Error fetching admin tasks:", error);
+      res.status(500).json({ message: "Error fetching admin tasks" });
+    }
+  });
+  
+  // Admin Route for Task Creation
+  router.post("/admin/tasks", validateRequest(insertTaskSchema), async (req, res) => {
+    try {
+      const task = await storage.createTask(req.body);
+      res.status(201).json(task);
+    } catch (error) {
+      console.error("Error creating admin task:", error);
+      res.status(500).json({ message: "Error creating admin task" });
+    }
+  });
+  
+  // Telegram görevleri oluşturmak için yeni endpoint
+  router.post("/admin/tasks/telegram", async (req, res) => {
+    try {
+      const tasks = await storage.createTelegramTasks();
+      res.status(201).json({ 
+        message: "Telegram görevleri başarıyla oluşturuldu", 
+        count: tasks.length,
+        tasks 
+      });
+    } catch (error) {
+      console.error("Error creating Telegram tasks:", error);
+      res.status(500).json({ message: "Error creating Telegram tasks" });
+    }
+  });
+  
+  // Admin Route for Task Updates
+  router.put("/admin/tasks/:id", validateRequest(insertTaskSchema.partial()), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const task = await storage.updateTask(parseInt(id, 10), req.body);
+      
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      res.json(task);
+    } catch (error) {
+      console.error("Error updating admin task:", error);
+      res.status(500).json({ message: "Error updating admin task" });
+    }
+  });
+  
+  // Admin Route for Task Deletion
+  router.delete("/admin/tasks/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const success = await storage.deleteTask(parseInt(id, 10));
+      
+      if (!success) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting task from admin:", error);
+      res.status(500).json({ message: "Error deleting task" });
     }
   });
   
@@ -481,6 +551,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin Route for Boost Creation
+  router.post("/admin/boosts", validateRequest(insertBoostTypeSchema), async (req, res) => {
+    try {
+      const boostType = await storage.createBoostType(req.body);
+      res.status(201).json(boostType);
+    } catch (error) {
+      console.error("Error creating boost from admin:", error);
+      res.status(500).json({ message: "Error creating boost" });
+    }
+  });
+  
+  // Admin Route for Boost Updates
+  router.put("/admin/boosts/:id", validateRequest(insertBoostTypeSchema.partial()), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const boostType = await storage.updateBoostType(parseInt(id, 10), req.body);
+      
+      if (!boostType) {
+        return res.status(404).json({ message: "Boost type not found" });
+      }
+      
+      res.json(boostType);
+    } catch (error) {
+      console.error("Error updating boost from admin:", error);
+      res.status(500).json({ message: "Error updating boost" });
+    }
+  });
+  
+  // Admin Route for Boost Deletion
+  router.delete("/admin/boosts/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const success = await storage.deleteBoostType(parseInt(id, 10));
+      
+      if (!success) {
+        return res.status(404).json({ message: "Boost type not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting boost from admin:", error);
+      res.status(500).json({ message: "Error deleting boost" });
+    }
+  });
+
   // Maintenance endpoint to deactivate expired boosts
   router.post("/maintenance/deactivate-expired-boosts", async (req, res) => {
     try {
@@ -489,6 +604,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deactivating expired boosts:", error);
       res.status(500).json({ message: "Error deactivating expired boosts" });
+    }
+  });
+  
+  // Health check
+  router.get("/health", async (req, res) => {
+    try {
+      // Veritabanı bağlantısını test et
+      const dbResult = await pool.query('SELECT NOW()');
+      res.json({ 
+        status: 'ok',
+        time: new Date().toISOString(),
+        database: {
+          connected: true,
+          time: dbResult.rows[0].now
+        }
+      });
+    } catch (error) {
+      console.error("Health check failed:", error);
+      res.status(500).json({ 
+        status: 'error',
+        message: error.message,
+        time: new Date().toISOString()
+      });
+    }
+  });
+  
+  // İlerleme tabanlı görevler için endpointler
+  router.post("/admin/tasks/progress", async (req, res) => {
+    try {
+      const tasks = await storage.createProgressTasks();
+      res.status(201).json({ 
+        message: "İlerleme tabanlı görevler başarıyla oluşturuldu", 
+        count: tasks.length,
+        tasks 
+      });
+    } catch (error) {
+      console.error("Error creating progress tasks:", error);
+      res.status(500).json({ message: "Error creating progress tasks" });
+    }
+  });
+
+  // Görev ilerlemesini arttırma
+  router.post("/users/:userId/tasks/:taskId/increment", async (req, res) => {
+    try {
+      const { userId, taskId } = req.params;
+      const { amount = 1 } = req.body;
+      
+      const updatedTask = await storage.incrementTaskProgress(
+        parseInt(userId, 10),
+        parseInt(taskId, 10),
+        amount
+      );
+      
+      if (!updatedTask) {
+        return res.status(404).json({ message: "Task or user not found" });
+      }
+      
+      res.json(updatedTask);
+    } catch (error) {
+      console.error("Error incrementing task progress:", error);
+      res.status(500).json({ message: "Error incrementing task progress" });
+    }
+  });
+
+  // Haftalık görevleri sıfırlama
+  router.post("/admin/tasks/reset-weekly", async (req, res) => {
+    try {
+      const resetCount = await storage.resetWeeklyTasks();
+      res.json({ 
+        message: "Haftalık görevler başarıyla sıfırlandı", 
+        resetCount 
+      });
+    } catch (error) {
+      console.error("Error resetting weekly tasks:", error);
+      res.status(500).json({ message: "Error resetting weekly tasks" });
     }
   });
   

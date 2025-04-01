@@ -1,5 +1,5 @@
 // Telegram Mini App SDK wrapper
-import { getUserByTelegramId, createUser } from './firebase';
+import { getUserByTelegramId, createUser } from './supabase';
 import { nanoid } from 'nanoid';
 import { User } from '@/types';
 
@@ -187,31 +187,21 @@ export function getTelegramUser(): {
     console.log('initDataUnsafe exists:', !!window.Telegram?.WebApp?.initDataUnsafe);
     console.log('user exists:', !!window.Telegram?.WebApp?.initDataUnsafe?.user);
     
-    // Determine if we're in development or production environment
-    const isDevelopment = import.meta.env.DEV;
+    // Her zaman test kullanıcısını döndür
+    console.log('Using test user data for development');
+    return {
+      telegramId: "123456789",
+      firstName: "Test",
+      lastName: "User",
+      username: "testuser",
+      photoUrl: "https://via.placeholder.com/100"
+    };
     
-    if (isDevelopment && (!window.Telegram?.WebApp?.initDataUnsafe?.user)) {
-      // Development environment - use test data
-      const testUser = {
-        telegramId: "123456789",
-        firstName: "Test",
-        lastName: "User",
-        username: "testuser",
-        photoUrl: "https://via.placeholder.com/100"
-      };
-      console.log('Using test user data for development');
-      return testUser;
-    }
+    // Production environment - get actual user data - Bu kısım devre dışı bırakıldı
+    /*
+    const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (!user) return null;
     
-    // Production or development with real Telegram WebApp
-    if (!isTelegramWebApp() || !window.Telegram?.WebApp?.initDataUnsafe?.user) {
-      console.log('Not in Telegram WebApp or user data unavailable');
-      return null;
-    }
-
-    const user = window.Telegram.WebApp.initDataUnsafe.user;
-    console.log('Telegram user data found:', user);
-
     return {
       telegramId: user.id.toString(),
       firstName: user.first_name,
@@ -219,104 +209,85 @@ export function getTelegramUser(): {
       username: user.username,
       photoUrl: user.photo_url
     };
+    */
   } catch (error) {
     console.error('Error getting Telegram user:', error);
     return null;
   }
 }
 
-// Get or create a user in Firebase based on Telegram data
+// Authenticate user with Telegram
 export async function authenticateTelegramUser(referralCode?: string): Promise<User | null> {
-  console.log('Starting authenticateTelegramUser function');
-  const telegramUser = getTelegramUser();
-  
-  console.log('getTelegramUser returned:', telegramUser);
-  
-  if (!telegramUser) {
-    console.error('No Telegram user found');
-    return null;
-  }
-  
   try {
-    // Try to fetch user with API first (much more reliable than Firebase)
-    try {
-      console.log('Trying to fetch user via API endpoint');
-      const response = await fetch(`/api/users/${telegramUser.telegramId}`);
-      
-      if (response.ok) {
-        const userData = await response.json();
-        console.log('User found via API:', userData);
-        return userData;
-      } else {
-        console.log('User not found via API, will try creating');
-        
-        // Generate a unique referral code
-        const newReferralCode = nanoid(8);
-        
-        // Try to create user via API
-        const userData = {
-          telegramId: telegramUser.telegramId,
-          firstName: telegramUser.firstName,
-          lastName: telegramUser.lastName,
-          username: telegramUser.username,
-          photoUrl: telegramUser.photoUrl,
-          referralCode: newReferralCode,
-          referredBy: referralCode
-        };
-        
-        console.log('Creating user with data via API:', userData);
-        
-        const createResponse = await fetch('/api/users', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(userData),
-        });
-        
-        if (createResponse.ok) {
-          const createdUser = await createResponse.json();
-          console.log('User created via API:', createdUser);
-          return createdUser;
-        } else {
-          console.warn('Failed to create user via API, will fall back to Firebase');
-        }
-      }
-    } catch (apiError) {
-      console.warn('API error, falling back to Firebase:', apiError);
+    console.log('Starting authenticateTelegramUser function');
+    const telegramUser = getTelegramUser();
+    console.log('getTelegramUser returned:', telegramUser);
+    
+    if (!telegramUser) {
+      throw new Error('No Telegram user found');
     }
     
-    // Fallback to Firebase if API fails
-    console.log('Looking up user in Firebase by Telegram ID:', telegramUser.telegramId);
-    let user = await getUserByTelegramId(telegramUser.telegramId);
+    // Admin sayfası için özel durum kontrolü
+    const isAdminPage = window.location.pathname.includes('/admin');
     
-    console.log('getUserByTelegramId returned:', user);
-    
-    // If user doesn't exist, create a new one
-    if (!user) {
-      console.log('User not found in Firebase, creating new user');
-      const newReferralCode = nanoid(8);
-      
-      const userData = {
+    if (isAdminPage) {
+      console.log('Admin sayfası için özel kimlik doğrulama');
+      return {
+        id: 1, // Sabit bir ID kullan
         telegramId: telegramUser.telegramId,
         firstName: telegramUser.firstName,
-        lastName: telegramUser.lastName,
-        username: telegramUser.username,
-        photoUrl: telegramUser.photoUrl,
-        referralCode: newReferralCode,
-        referredBy: referralCode
-      };
-      
-      console.log('Creating user with data:', userData);
-      user = await createUser(userData);
-      console.log('User created:', user);
-    } else {
-      console.log('Existing user found in Firebase');
+        lastName: telegramUser.lastName || '',
+        username: telegramUser.username || '',
+        photoUrl: telegramUser.photoUrl || '',
+        referralCode: 'ADMIN123',
+        points: 1000,
+        level: 10,
+        miningSpeed: 100,
+        lastMiningTime: new Date(),
+        joinDate: new Date(),
+        completedTasksCount: 0,
+        boostUsageCount: 0,
+        referralCount: 0,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as unknown as User;
     }
     
-    return user;
+    // Normal kullanıcılar için mevcut kontroller
+    try {
+      const existingUser = await getUserByTelegramId(telegramUser.telegramId);
+      if (existingUser) {
+        return existingUser;
+      }
+    } catch (error) {
+      console.log('Error getting user from Supabase:', error);
+    }
+    
+    // Create new user if not found
+    const newUser = {
+      telegramId: telegramUser.telegramId,
+      firstName: telegramUser.firstName,
+      lastName: telegramUser.lastName || '',
+      username: telegramUser.username || '',
+      photoUrl: telegramUser.photoUrl || '',
+      referralCode: nanoid(8),
+      points: 0,
+      level: 1,
+      miningSpeed: 10,
+      lastMiningTime: new Date(),
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedTasksCount: 0,
+      boostUsageCount: 0
+    };
+    
+    const createdUser = await createUser(newUser);
+    return createdUser;
+    
   } catch (error) {
-    console.error('Error authenticating Telegram user:', error);
+    console.error('Error in authenticateTelegramUser:', error);
     return null;
   }
 }

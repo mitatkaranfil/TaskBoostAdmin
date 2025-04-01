@@ -1,10 +1,37 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { PostgresStorage } from "./postgres";
+
+// Initialize PostgreSQL storage
+export const storage = new PostgresStorage();
 
 const app = express();
+
+// CORS ayarları
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Basit test API endpoint'i
+app.get("/api/test", (req, res) => {
+  res.json({ 
+    status: "OK", 
+    message: "API çalışıyor!",
+    time: new Date().toISOString() 
+  });
+});
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -37,34 +64,52 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  try {
+    const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
-  });
+      res.status(status).json({ message });
+    });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+    // importantly only setup vite in development and after
+    // setting up all the other routes so the catch-all route
+    // doesn't catch our api routes
+    if (process.env.NODE_ENV === "development") {
+      await setupVite(app, server);
+    } else {
+      // Serve static files from dist/public in production
+      const path = await import('path');
+      const { dirname } = path;
+      const { fileURLToPath } = await import('url');
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const distPath = path.resolve(__dirname, '../dist/public');
+      app.use(express.static(distPath));
+      
+      // Handle client-side routing for SPA
+      app.get('*', (req, res) => {
+        res.sendFile(path.resolve(distPath, 'index.html'));
+      });
+    }
+
+    // catch-all route for static files and client
+    if (process.env.NODE_ENV === "development") {
+      app.use(serveStatic);
+    }
+
+    // start the server
+    const PORT = process.env.SERVER_PORT || process.env.PORT || 3001;
+    server.listen(PORT, () => {
+      console.log(`Server running at http://localhost:${PORT}`);
+    });
+
+    return server;
+
+  } catch (error) {
+    console.error('Server startup error:', error);
+    process.exit(1);
   }
-
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
 })();

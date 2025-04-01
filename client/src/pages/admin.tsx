@@ -1,1094 +1,672 @@
-import React, { useState, useEffect } from "react";
-import { useLocation } from "wouter";
-import { 
-  getAllTasks, 
-  getAllBoostTypes, 
-  createTask, 
-  updateTask, 
-  deleteTask,
-  createBoostType,
-  updateBoostType,
-  deleteBoostType
-} from "@/lib/firebase";
-import { Task, BoostType } from "@/types";
-import { useToast } from "@/hooks/use-toast";
-import { 
-  Tabs, 
-  TabsContent, 
-  TabsList, 
-  TabsTrigger 
-} from "@/components/ui/tabs";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useState, useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { Task, BoostType } from '@/types';
+import { getAllTasks, createTask, updateTask, deleteTask, getAllBoostTypes, createBoostType, updateBoostType, deleteBoostType } from '@/lib/supabase';
 
-// Admin authentication placeholder
-// In a real app, this would verify admin credentials
-const isAdmin = true;
-
-const Admin: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true);
+export default function Admin() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [boosts, setBoosts] = useState<BoostType[]>([]);
-  const [activeTab, setActiveTab] = useState("tasks");
   const { toast } = useToast();
-  const [location, navigate] = useLocation();
   
+  // New states for form inputs
+  const [newTask, setNewTask] = useState<Partial<Task>>({
+    title: '',
+    description: '',
+    type: 'daily',
+    points: 50,
+    requiredAmount: 1,
+    isActive: true,
+    telegramAction: null,
+    telegramTarget: null
+  });
+  
+  const [newBoost, setNewBoost] = useState<Partial<BoostType>>({
+    name: '',
+    description: '',
+    multiplier: 200,
+    durationHours: 24,
+    price: 100,
+    isActive: true,
+    iconName: 'rocket',
+    colorClass: 'blue',
+    isPopular: false
+  });
+
   useEffect(() => {
-    // Check if user is admin
-    if (!isAdmin) {
-      navigate("/");
+    loadTasks();
+    loadBoosts();
+  }, []);
+  
+  const loadTasks = async () => {
+    try {
+      const tasks = await getAllTasks();
+      setTasks(tasks);
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load tasks',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const loadBoosts = async () => {
+    try {
+      const boosts = await getAllBoostTypes();
+      setBoosts(boosts);
+    } catch (error) {
+      console.error('Error loading boosts:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load boosts',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleTaskChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    // Handle checkbox inputs
+    if (type === 'checkbox') {
+      setNewTask({
+        ...newTask,
+        [name]: (e.target as HTMLInputElement).checked
+      });
       return;
     }
     
-    loadData();
-  }, []);
-  
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
-      console.log("Loading admin data...");
-      
-      // Try API first
-      try {
-        console.log("Trying to load tasks from API");
-        const response = await fetch("/api/admin/tasks");
-        if (response.ok) {
-          const tasksData = await response.json();
-          console.log("Tasks loaded from API:", tasksData);
-          setTasks(tasksData);
-        } else {
-          console.warn("Failed to load tasks from API, falling back to Firebase");
-          // Fallback to Firebase
-          const tasksData = await getAllTasks();
-          console.log("Tasks loaded from Firebase:", tasksData);
-          setTasks(tasksData);
-        }
-      } catch (apiError) {
-        console.warn("API error loading tasks, falling back to Firebase:", apiError);
-        const tasksData = await getAllTasks();
-        console.log("Tasks loaded from Firebase:", tasksData);
-        setTasks(tasksData);
-      }
-      
-      // Try API for boosts
-      try {
-        console.log("Trying to load boosts from API");
-        const response = await fetch("/api/admin/boosts");
-        if (response.ok) {
-          const boostsData = await response.json();
-          console.log("Boosts loaded from API:", boostsData);
-          setBoosts(boostsData);
-        } else {
-          console.warn("Failed to load boosts from API, falling back to Firebase");
-          // Fallback to Firebase
-          const boostsData = await getAllBoostTypes();
-          console.log("Boosts loaded from Firebase:", boostsData);
-          setBoosts(boostsData);
-        }
-      } catch (apiError) {
-        console.warn("API error loading boosts, falling back to Firebase:", apiError);
-        const boostsData = await getAllBoostTypes();
-        console.log("Boosts loaded from Firebase:", boostsData);
-        setBoosts(boostsData);
-      }
-      
-    } catch (error) {
-      console.error("Error loading admin data:", error);
-      toast({
-        title: "Veri Yükleme Hatası",
-        description: "Admin verisi yüklenirken bir hata oluştu.",
-        variant: "destructive",
+    // Handle number inputs
+    if (type === 'number') {
+      setNewTask({
+        ...newTask,
+        [name]: parseInt(value, 10)
       });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  // Task form schema
-  const taskFormSchema = z.object({
-    title: z.string().min(3, "Başlık en az 3 karakter olmalıdır"),
-    description: z.string().min(5, "Açıklama en az 5 karakter olmalıdır"),
-    type: z.enum(["daily", "weekly", "special"]),
-    points: z.coerce.number().min(1, "Puan en az 1 olmalıdır"),
-    requiredAmount: z.coerce.number().min(1, "Gerekli miktar en az 1 olmalıdır"),
-    isActive: z.boolean().default(true),
-    telegramAction: z.string().optional(),
-    telegramTarget: z.string().optional().nullable(),
-  });
-  
-  // Boost form schema
-  const boostFormSchema = z.object({
-    name: z.string().min(3, "İsim en az 3 karakter olmalıdır"),
-    description: z.string().min(5, "Açıklama en az 5 karakter olmalıdır"),
-    multiplier: z.coerce.number().min(100, "Çarpan en az 100 olmalıdır (1x)"),
-    durationHours: z.coerce.number().min(1, "Süre en az 1 saat olmalıdır"),
-    price: z.coerce.number().min(1, "Fiyat en az 1 olmalıdır"),
-    isActive: z.boolean().default(true),
-    iconName: z.string().default("rocket"),
-    colorClass: z.string().default("blue"),
-    isPopular: z.boolean().default(false),
-  });
-  
-  // Task management
-  const handleAddTask = async (data: z.infer<typeof taskFormSchema>) => {
-    try {
-      console.log("Adding task with data:", JSON.stringify(data));
-      
-      // Try API first
-      try {
-        const response = await fetch('/api/tasks', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log("Task added via API:", result);
-          toast({
-            title: "Görev Eklendi",
-            description: "Yeni görev başarıyla eklendi.",
-          });
-          loadData();
           return;
-        } else {
-          console.warn("Failed to add task via API, falling back to Firebase");
-        }
-      } catch (apiError) {
-        console.warn("API error adding task, falling back to Firebase:", apiError);
-      }
-      
-      // Firebase fallback
-      const result = await createTask(data);
-      console.log("Task added via Firebase:", result);
-      
-      toast({
-        title: "Görev Eklendi",
-        description: "Yeni görev başarıyla eklendi.",
-      });
-      loadData();
-    } catch (error) {
-      console.error("Error adding task:", error);
-      toast({
-        title: "Görev Ekleme Hatası",
-        description: "Yeni görev eklenirken bir hata oluştu.",
-        variant: "destructive",
-      });
     }
+    
+    // Handle text inputs
+    setNewTask({
+      ...newTask,
+      [name]: value
+    });
   };
-  
-  const handleUpdateTask = async (id: string, data: z.infer<typeof taskFormSchema>) => {
-    try {
-      console.log("Updating task with ID:", id, "and data:", JSON.stringify(data));
-      
-      // Make sure telegramTarget is null if empty
-      if (data.telegramTarget === "") {
-        data.telegramTarget = null;
-      }
-      
-      // Try API first
-      try {
-        const response = await fetch(`/api/tasks/${id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log("Task updated via API:", result);
-          toast({
-            title: "Görev Güncellendi",
-            description: "Görev başarıyla güncellendi.",
-          });
-          loadData();
+
+  const handleBoostChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
+    // Handle checkbox inputs
+    if (type === 'checkbox') {
+      setNewBoost({
+        ...newBoost,
+        [name]: (e.target as HTMLInputElement).checked
+      });
+      return;
+    }
+    
+    // Handle number inputs
+    if (type === 'number') {
+      setNewBoost({
+        ...newBoost,
+        [name]: parseInt(value, 10)
+      });
           return;
-        } else {
-          console.warn("Failed to update task via API, falling back to Firebase");
-        }
-      } catch (apiError) {
-        console.warn("API error updating task, falling back to Firebase:", apiError);
-      }
-      
-      // Firebase fallback
-      await updateTask(id, data);
-      console.log("Task updated via Firebase");
-      
-      toast({
-        title: "Görev Güncellendi",
-        description: "Görev başarıyla güncellendi.",
-      });
-      loadData();
-    } catch (error) {
-      console.error("Error updating task:", error);
-      toast({
-        title: "Görev Güncelleme Hatası",
-        description: "Görev güncellenirken bir hata oluştu.",
-        variant: "destructive",
-      });
     }
+    
+    // Handle text inputs
+    setNewBoost({
+      ...newBoost,
+      [name]: value
+    });
   };
-  
-  const handleDeleteTask = async (id: string) => {
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      console.log("Deleting task with ID:", id);
-      
-      // Try API first
-      try {
-        const response = await fetch(`/api/tasks/${id}`, {
-          method: 'DELETE',
-        });
-        
-        if (response.ok) {
-          console.log("Task deleted via API");
-          toast({
-            title: "Görev Silindi",
-            description: "Görev başarıyla silindi.",
-          });
-          loadData();
-          return;
-        } else {
-          console.warn("Failed to delete task via API, falling back to Firebase");
-        }
-      } catch (apiError) {
-        console.warn("API error deleting task, falling back to Firebase:", apiError);
-      }
-      
-      // Firebase fallback
-      await deleteTask(id);
-      console.log("Task deleted via Firebase");
-      
+      await createTask(newTask);
       toast({
-        title: "Görev Silindi",
-        description: "Görev başarıyla silindi.",
+        title: 'Success',
+        description: 'Task added successfully',
       });
-      loadData();
-    } catch (error) {
-      console.error("Error deleting task:", error);
-      toast({
-        title: "Görev Silme Hatası",
-        description: "Görev silinirken bir hata oluştu.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  // Boost management
-  const handleAddBoost = async (data: z.infer<typeof boostFormSchema>) => {
-    try {
-      await createBoostType(data);
-      toast({
-        title: "Boost Eklendi",
-        description: "Yeni boost başarıyla eklendi.",
-      });
-      loadData();
-    } catch (error) {
-      console.error("Error adding boost:", error);
-      toast({
-        title: "Boost Ekleme Hatası",
-        description: "Yeni boost eklenirken bir hata oluştu.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const handleUpdateBoost = async (id: string, data: z.infer<typeof boostFormSchema>) => {
-    try {
-      console.log("Updating boost with ID:", id, "and data:", JSON.stringify(data));
       
-      // Try API first
-      try {
-        const response = await fetch(`/api/boosts/${id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          console.log("Boost updated via API:", result);
-          toast({
-            title: "Boost Güncellendi",
-            description: "Boost başarıyla güncellendi.",
-          });
-          loadData();
-          return;
-        } else {
-          console.warn("Failed to update boost via API, falling back to Firebase");
-        }
-      } catch (apiError) {
-        console.warn("API error updating boost, falling back to Firebase:", apiError);
-      }
-      
-      // Firebase fallback
-      await updateBoostType(id, data);
-      console.log("Boost updated via Firebase");
-      
-      toast({
-        title: "Boost Güncellendi",
-        description: "Boost başarıyla güncellendi.",
-      });
-      loadData();
-    } catch (error) {
-      console.error("Error updating boost:", error);
-      toast({
-        title: "Boost Güncelleme Hatası",
-        description: "Boost güncellenirken bir hata oluştu.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const handleDeleteBoost = async (id: string) => {
-    try {
-      console.log("Deleting boost with ID:", id);
-      
-      // Try API first
-      try {
-        const response = await fetch(`/api/boosts/${id}`, {
-          method: 'DELETE',
-        });
-        
-        if (response.ok) {
-          console.log("Boost deleted via API");
-          toast({
-            title: "Boost Silindi",
-            description: "Boost başarıyla silindi.",
-          });
-          loadData();
-          return;
-        } else {
-          console.warn("Failed to delete boost via API, falling back to Firebase");
-        }
-      } catch (apiError) {
-        console.warn("API error deleting boost, falling back to Firebase:", apiError);
-      }
-      
-      // Firebase fallback
-      await deleteBoostType(id);
-      console.log("Boost deleted via Firebase");
-      
-      toast({
-        title: "Boost Silindi",
-        description: "Boost başarıyla silindi.",
-      });
-      loadData();
-    } catch (error) {
-      console.error("Error deleting boost:", error);
-      toast({
-        title: "Boost Silme Hatası",
-        description: "Boost silinirken bir hata oluştu.",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  // Task Dialog Component
-  const TaskDialog: React.FC<{
-    task?: Task;
-    onSubmit: (data: z.infer<typeof taskFormSchema>) => void;
-    buttonText: string;
-  }> = ({ task, onSubmit, buttonText }) => {
-    // Create a clean default object without type errors
-    const getDefaultValues = () => {
-      if (task) {
-        // Convert task data to match the schema
-        return {
-          title: task.title,
-          description: task.description,
-          type: task.type as "daily" | "weekly" | "special",
-          points: task.points,
-          requiredAmount: task.requiredAmount,
-          isActive: task.isActive,
-          telegramAction: task.telegramAction || "",
-          telegramTarget: task.telegramTarget || "",
-        };
-      }
-      
-      return {
-        title: "",
-        description: "",
-        type: "daily" as const,
-        points: 10,
+      // Reset form and reload tasks
+      setNewTask({
+        title: '',
+        description: '',
+        type: 'daily',
+        points: 50,
         requiredAmount: 1,
         isActive: true,
-        telegramAction: "",
-        telegramTarget: "",
-      };
-    };
-    
-    const form = useForm<z.infer<typeof taskFormSchema>>({
-      resolver: zodResolver(taskFormSchema),
-      defaultValues: getDefaultValues(),
-    });
-    
-    const [isOpen, setIsOpen] = useState(false);
-    
-    const handleFormSubmit = (data: z.infer<typeof taskFormSchema>) => {
-      console.log("Task form submitted with data:", JSON.stringify(data));
-      
-      // Make sure telegramTarget is null if empty
-      if (data.telegramTarget === "") {
-        data.telegramTarget = null;
-      }
-      
-      onSubmit(data);
-      setIsOpen(false);
-    };
-    
-    return (
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogTrigger asChild>
-          <Button variant={task ? "outline" : "default"}>{buttonText}</Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>{task ? "Görevi Düzenle" : "Yeni Görev Ekle"}</DialogTitle>
-            <DialogDescription>
-              {task ? "Görev bilgilerini düzenle" : "Yeni bir görev ekle"}
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Başlık</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Görev başlığı" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Açıklama</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Görev açıklaması" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tür</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Görev türü" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="daily">Günlük</SelectItem>
-                          <SelectItem value="weekly">Haftalık</SelectItem>
-                          <SelectItem value="special">Özel</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="points"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Puan</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="Puan değeri"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="requiredAmount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Gerekli Miktar</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="Gerekli miktar"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="isActive"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-end space-x-2 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Aktif</FormLabel>
-                        <FormDescription>
-                          Görevin kullanıcılara gösterilip gösterilmeyeceği
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <FormField
-                control={form.control}
-                name="telegramAction"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Telegram Aksiyonu</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Telegram aksiyonu (ör: join_channel)"
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      open_app, send_message, join_channel, invite_friends vb.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="telegramTarget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Telegram Hedefi</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Telegram hedefi (ör: @kanal_adi)"
-                        {...field}
-                        value={field.value || ""}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Grup veya kanal adresi
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter>
-                <Button type="submit">Kaydet</Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-    );
+        telegramAction: null,
+        telegramTarget: null
+      });
+      loadTasks();
+    } catch (error) {
+      console.error('Error adding task:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add task',
+        variant: 'destructive',
+      });
+    }
   };
   
-  // Boost Dialog Component
-  const BoostDialog: React.FC<{
-    boost?: BoostType;
-    onSubmit: (data: z.infer<typeof boostFormSchema>) => void;
-    buttonText: string;
-  }> = ({ boost, onSubmit, buttonText }) => {
-    const form = useForm<z.infer<typeof boostFormSchema>>({
-      resolver: zodResolver(boostFormSchema),
-      defaultValues: boost || {
-        name: "",
-        description: "",
-        multiplier: 150,
+  const handleAddBoostSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createBoostType(newBoost);
+          toast({
+        title: 'Success',
+        description: 'Boost added successfully',
+      });
+      
+      // Reset form and reload boosts
+      setNewBoost({
+        name: '',
+        description: '',
+        multiplier: 200,
         durationHours: 24,
-        price: 500,
+        price: 100,
         isActive: true,
-        iconName: "rocket",
-        colorClass: "blue",
-        isPopular: false,
-      },
-    });
-    
-    const [isOpen, setIsOpen] = useState(false);
-    
-    const handleFormSubmit = (data: z.infer<typeof boostFormSchema>) => {
-      onSubmit(data);
-      setIsOpen(false);
-    };
-    
-    return (
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogTrigger asChild>
-          <Button variant={boost ? "outline" : "default"}>{buttonText}</Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>{boost ? "Boost Düzenle" : "Yeni Boost Ekle"}</DialogTitle>
-            <DialogDescription>
-              {boost ? "Boost bilgilerini düzenle" : "Yeni bir boost ekle"}
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>İsim</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Boost ismi" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Açıklama</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Boost açıklaması" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="multiplier"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Çarpan (x100)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="Çarpan (150 = 1.5x)"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        150 = 1.5x, 200 = 2x, 300 = 3x
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="durationHours"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Süre (Saat)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="Süre (saat)"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="price"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Fiyat</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="Fiyat"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="isActive"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-end space-x-2 space-y-0">
-                      <FormControl>
-                        <Checkbox
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel>Aktif</FormLabel>
-                        <FormDescription>
-                          Boostun mağazada gösterilip gösterilmeyeceği
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="iconName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>İkon Adı</FormLabel>
-                      <FormControl>
-                        <Input placeholder="İkon adı" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Remix Icon ismi (ör: rocket)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="colorClass"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Renk Sınıfı</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Renk seç" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="blue">Mavi</SelectItem>
-                          <SelectItem value="purple">Mor</SelectItem>
-                          <SelectItem value="yellow">Sarı</SelectItem>
-                          <SelectItem value="red">Kırmızı</SelectItem>
-                          <SelectItem value="green">Yeşil</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <FormField
-                control={form.control}
-                name="isPopular"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-2 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel>Popüler</FormLabel>
-                      <FormDescription>
-                        Bu boostu popüler olarak işaretle
-                      </FormDescription>
-                    </div>
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter>
-                <Button type="submit">Kaydet</Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-    );
+        iconName: 'rocket',
+        colorClass: 'blue',
+        isPopular: false
+      });
+      loadBoosts();
+    } catch (error) {
+      console.error('Error adding boost:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add boost',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const handleUpdateTask = async (taskId: string, updatedTask: Partial<Task>) => {
+    try {
+      await updateTask(taskId, updatedTask);
+      toast({
+        title: 'Success',
+        description: 'Task updated successfully',
+      });
+      loadTasks();
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update task',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await deleteTask(taskId);
+      toast({
+        title: 'Success',
+        description: 'Task deleted successfully',
+      });
+      loadTasks();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+          toast({
+        title: 'Error',
+        description: 'Failed to delete task',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAddBoost = async (newBoost: Partial<BoostType>) => {
+    try {
+      await createBoostType(newBoost);
+      toast({
+        title: 'Success',
+        description: 'Boost added successfully',
+      });
+      loadBoosts();
+    } catch (error) {
+      console.error('Error adding boost:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add boost',
+        variant: 'destructive',
+      });
+    }
+  };
+  
+  const handleUpdateBoost = async (boostId: string, updatedBoost: Partial<BoostType>) => {
+    try {
+      await updateBoostType(boostId, updatedBoost);
+      toast({
+        title: 'Success',
+        description: 'Boost updated successfully',
+      });
+      loadBoosts();
+    } catch (error) {
+      console.error('Error updating boost:', error);
+          toast({
+        title: 'Error',
+        description: 'Failed to update boost',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteBoost = async (boostId: string) => {
+    try {
+      await deleteBoostType(boostId);
+      toast({
+        title: 'Success',
+        description: 'Boost deleted successfully',
+      });
+      loadBoosts();
+    } catch (error) {
+      console.error('Error deleting boost:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete boost',
+        variant: 'destructive',
+      });
+    }
   };
   
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Admin Panel</h1>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Admin Panel</h1>
       
-      <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="tasks">Görevler</TabsTrigger>
-          <TabsTrigger value="boosts">Boostlar</TabsTrigger>
-        </TabsList>
+      {/* Tasks Section */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Tasks</h2>
         
-        <TabsContent value="tasks">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle>Görev Yönetimi</CardTitle>
-                  <CardDescription>
-                    Tüm görevleri görüntüle, ekle, düzenle veya sil
-                  </CardDescription>
-                </div>
-                <TaskDialog
-                  onSubmit={handleAddTask}
-                  buttonText="Yeni Görev Ekle"
+        {/* Task Creation Form */}
+        <div className="bg-card p-4 rounded-lg mb-6 border border-border">
+          <h3 className="font-medium mb-3">Add New Task</h3>
+          <form onSubmit={handleAddTask} className="space-y-3">
+            <div>
+              <label className="block text-sm mb-1">Title</label>
+              <input 
+                type="text" 
+                name="title"
+                value={newTask.title}
+                onChange={handleTaskChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Description</label>
+              <textarea 
+                name="description"
+                value={newTask.description}
+                onChange={handleTaskChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Type</label>
+              <select 
+                  name="type"
+                value={newTask.type}
+                onChange={handleTaskChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                required
+              >
+                <option value="daily">Daily (Günlük)</option>
+                <option value="weekly">Weekly (Haftalık)</option>
+                <option value="social">Social (Sosyal)</option>
+                <option value="referral">Referral (Davet)</option>
+                <option value="milestone">Milestone (Kilometre Taşı)</option>
+                <option value="special">Special (Özel)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Points</label>
+              <input 
+                          type="number"
+                name="points"
+                value={newTask.points}
+                onChange={handleTaskChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                min="1"
+                required
                 />
               </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="text-center py-4">Yükleniyor...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Başlık</TableHead>
-                      <TableHead>Tür</TableHead>
-                      <TableHead>Puan</TableHead>
-                      <TableHead>Durum</TableHead>
-                      <TableHead className="text-right">İşlemler</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tasks.length > 0 ? (
-                      tasks.map((task) => (
-                        <TableRow key={task.id}>
-                          <TableCell className="font-medium">{task.title}</TableCell>
-                          <TableCell>
-                            {task.type === "daily"
-                              ? "Günlük"
-                              : task.type === "weekly"
-                              ? "Haftalık"
-                              : "Özel"}
-                          </TableCell>
-                          <TableCell>{task.points}</TableCell>
-                          <TableCell>
-                            <span
-                              className={`px-2 py-1 rounded text-xs ${
-                                task.isActive
-                                  ? "bg-green-500/20 text-green-400"
-                                  : "bg-red-500/20 text-red-400"
-                              }`}
-                            >
-                              {task.isActive ? "Aktif" : "Pasif"}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                              <TaskDialog
-                                task={task}
-                                onSubmit={(data) => handleUpdateTask(task.id, data)}
-                                buttonText="Düzenle"
-                              />
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleDeleteTask(task.id)}
-                              >
-                                Sil
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center">
-                          Henüz görev yok
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+            <div>
+              <label className="block text-sm mb-1">Required Amount</label>
+              <input 
+                          type="number"
+                name="requiredAmount"
+                value={newTask.requiredAmount}
+                onChange={handleTaskChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                min="1"
+                required
+              />
+                      </div>
+            <div>
+              <label className="block text-sm mb-1">Telegram Action</label>
+              <select 
+                name="telegramAction"
+                value={newTask.telegramAction || ''}
+                onChange={handleTaskChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+              >
+                <option value="">None</option>
+                <option value="open_app">Open App</option>
+                <option value="join_channel">Join Channel</option>
+                <option value="send_message">Send Message</option>
+                <option value="invite_friends">Invite Friends</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Telegram Target (URL or ID)</label>
+              <input 
+                type="text" 
+                name="telegramTarget"
+                value={newTask.telegramTarget || ''}
+                onChange={handleTaskChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                placeholder="https://t.me/channelname or @username"
+              />
+            </div>
+            <div className="flex items-center">
+              <input 
+                type="checkbox" 
+                name="isActive"
+                checked={!!newTask.isActive}
+                onChange={handleTaskChange}
+                className="mr-2"
+              />
+              <label className="text-sm">Active</label>
+            </div>
+            <button 
+              type="submit"
+              className="bg-primary text-white px-4 py-2 rounded"
+            >
+              Add Task
+            </button>
+            </form>
+          
+          {/* Bulk Task Creation */}
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <h3 className="font-medium mb-3">Bulk Task Creation</h3>
+            <div className="flex flex-wrap gap-2">
+              <button 
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/admin/tasks/telegram', { method: 'POST' });
+                    if (response.ok) {
+                      const data = await response.json();
+                      toast({
+                        title: 'Success',
+                        description: `Created ${data.count} Telegram tasks`,
+                      });
+                      loadTasks();
+                    } else {
+                      throw new Error('Failed to create Telegram tasks');
+                    }
+                  } catch (error) {
+                    console.error(error);
+                    toast({
+                      title: 'Error',
+                      description: 'Failed to create Telegram tasks',
+                      variant: 'destructive',
+                    });
+                  }
+                }} 
+                className="bg-blue-500 text-white px-3 py-1.5 text-sm rounded"
+              >
+                Create Telegram Tasks
+              </button>
+              
+              <button 
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/admin/tasks/progress', { method: 'POST' });
+                    if (response.ok) {
+                      const data = await response.json();
+                      toast({
+                        title: 'Success',
+                        description: `Created ${data.count} Progress tasks`,
+                      });
+                      loadTasks();
+                    } else {
+                      throw new Error('Failed to create Progress tasks');
+                    }
+                  } catch (error) {
+                    console.error(error);
+                    toast({
+                      title: 'Error',
+                      description: 'Failed to create Progress tasks',
+                      variant: 'destructive',
+                    });
+                  }
+                }} 
+                className="bg-green-500 text-white px-3 py-1.5 text-sm rounded"
+              >
+                Create Progress Tasks
+              </button>
+              
+              <button 
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/admin/tasks/reset-weekly', { method: 'POST' });
+                    if (response.ok) {
+                      const data = await response.json();
+                      toast({
+                        title: 'Success',
+                        description: `Reset ${data.resetCount} weekly tasks`,
+                      });
+                      loadTasks();
+                    } else {
+                      throw new Error('Failed to reset weekly tasks');
+                    }
+                  } catch (error) {
+                    console.error(error);
+                    toast({
+                      title: 'Error',
+                      description: 'Failed to reset weekly tasks',
+                      variant: 'destructive',
+                    });
+                  }
+                }} 
+                className="bg-amber-500 text-white px-3 py-1.5 text-sm rounded"
+              >
+                Reset Weekly Tasks
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Tasks List */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tasks.map((task) => (
+            <div key={task.id} className="border p-4 rounded-lg">
+              <h3 className="font-medium">{task.title}</h3>
+              <p className="text-sm text-gray-600">{task.description}</p>
+              <p className="text-sm mt-1">
+                <span className="font-medium">Type:</span> {task.type}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Points:</span> {task.points}
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Required:</span> {task.requiredAmount}
+              </p>
+              {task.telegramAction && (
+                <p className="text-sm">
+                  <span className="font-medium">Telegram Action:</span> {task.telegramAction}
+                </p>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+              {task.telegramTarget && (
+                <p className="text-sm">
+                  <span className="font-medium">Telegram Target:</span> <span className="text-blue-500">{task.telegramTarget}</span>
+                </p>
+              )}
+              <div className="mt-2 flex justify-between items-center">
+                <span className={`text-xs px-2 py-0.5 rounded ${task.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {task.isActive ? 'Active' : 'Inactive'}
+                </span>
+                <button
+                  onClick={() => handleDeleteTask(task.id)}
+                  className="text-red-600 text-sm hover:text-red-800"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Boosts Section */}
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Boosts</h2>
         
-        <TabsContent value="boosts">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle>Boost Yönetimi</CardTitle>
-                  <CardDescription>
-                    Tüm boostları görüntüle, ekle, düzenle veya sil
-                  </CardDescription>
-                </div>
-                <BoostDialog
-                  onSubmit={handleAddBoost}
-                  buttonText="Yeni Boost Ekle"
+        {/* Boost Creation Form */}
+        <div className="bg-card p-4 rounded-lg mb-6 border border-border">
+          <h3 className="font-medium mb-3">Add New Boost</h3>
+          <form onSubmit={handleAddBoostSubmit} className="space-y-3">
+            <div>
+              <label className="block text-sm mb-1">Name</label>
+              <input 
+                type="text" 
+                name="name"
+                value={newBoost.name}
+                onChange={handleBoostChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Description</label>
+              <textarea 
+                name="description"
+                value={newBoost.description}
+                onChange={handleBoostChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Multiplier (100 = 1x, 200 = 2x)</label>
+              <input 
+                          type="number"
+                name="multiplier"
+                value={newBoost.multiplier}
+                onChange={handleBoostChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                min="100"
+                required
                 />
               </div>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <div className="text-center py-4">Yükleniyor...</div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>İsim</TableHead>
-                      <TableHead>Çarpan</TableHead>
-                      <TableHead>Süre</TableHead>
-                      <TableHead>Fiyat</TableHead>
-                      <TableHead>Durum</TableHead>
-                      <TableHead className="text-right">İşlemler</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {boosts.length > 0 ? (
-                      boosts.map((boost) => (
-                        <TableRow key={boost.id}>
-                          <TableCell className="font-medium">{boost.name}</TableCell>
-                          <TableCell>{boost.multiplier / 100}x</TableCell>
-                          <TableCell>{boost.durationHours} saat</TableCell>
-                          <TableCell>{boost.price} puan</TableCell>
-                          <TableCell>
-                            <span
-                              className={`px-2 py-1 rounded text-xs ${
-                                boost.isActive
-                                  ? "bg-green-500/20 text-green-400"
-                                  : "bg-red-500/20 text-red-400"
-                              }`}
-                            >
-                              {boost.isActive ? "Aktif" : "Pasif"}
-                            </span>
-                            {boost.isPopular && (
-                              <span className="ml-2 px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400">
-                                Popüler
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                              <BoostDialog
-                                boost={boost}
-                                onSubmit={(data) => handleUpdateBoost(boost.id, data)}
-                                buttonText="Düzenle"
-                              />
-                              <Button
-                                variant="destructive"
-                                size="sm"
+            <div>
+              <label className="block text-sm mb-1">Duration (hours)</label>
+              <input 
+                          type="number"
+                name="durationHours"
+                value={newBoost.durationHours}
+                onChange={handleBoostChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                min="1"
+                required
+              />
+                      </div>
+            <div>
+              <label className="block text-sm mb-1">Price</label>
+              <input 
+                type="number" 
+                name="price"
+                value={newBoost.price}
+                onChange={handleBoostChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                min="1"
+                required
+                />
+              </div>
+            <div>
+              <label className="block text-sm mb-1">Icon Name</label>
+              <input 
+                type="text" 
+                  name="iconName"
+                value={newBoost.iconName}
+                onChange={handleBoostChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Color Class</label>
+              <input 
+                type="text" 
+                  name="colorClass"
+                value={newBoost.colorClass}
+                onChange={handleBoostChange}
+                className="w-full p-2 border rounded bg-background text-foreground"
+                required
+                />
+              </div>
+            <div className="flex items-center">
+              <input 
+                type="checkbox" 
+                name="isActive"
+                checked={!!newBoost.isActive}
+                onChange={handleBoostChange}
+                className="mr-2"
+              />
+              <label className="text-sm">Active</label>
+                    </div>
+            <div className="flex items-center">
+              <input 
+                type="checkbox" 
+                name="isPopular"
+                checked={!!newBoost.isPopular}
+                onChange={handleBoostChange}
+                className="mr-2"
+              />
+              <label className="text-sm">Popular</label>
+                </div>
+            <button 
+              type="submit"
+              className="bg-primary text-white px-4 py-2 rounded"
+            >
+              Add Boost
+            </button>
+          </form>
+                            </div>
+        
+        {/* Boosts List */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {boosts.map((boost) => (
+            <div key={boost.id} className="border p-4 rounded-lg">
+              <h3 className="font-medium">{boost.name}</h3>
+              <p className="text-sm text-gray-600">{boost.description}</p>
+              <p className="text-sm mt-1">
+                <span className="font-medium">Multiplier:</span> {boost.multiplier/100}x
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Duration:</span> {boost.durationHours} hours
+              </p>
+              <p className="text-sm">
+                <span className="font-medium">Price:</span> {boost.price} points
+              </p>
+              <div className="mt-2">
+                <button
                                 onClick={() => handleDeleteBoost(boost.id)}
+                  className="text-red-600 text-sm hover:text-red-800"
                               >
-                                Sil
-                              </Button>
+                  Delete
+                </button>
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center">
-                          Henüz boost yok
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-      
-      <div className="mt-6 text-center">
-        <Button variant="outline" onClick={() => navigate("/")}>
-          Ana Sayfaya Dön
-        </Button>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
-};
-
-export default Admin;
+}

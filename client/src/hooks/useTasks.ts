@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getTasks, getUserTasks, updateUserTaskProgress } from "@/lib/firebase";
+import { getTasks, getUserTasks, updateUserTaskProgress, incrementUserTaskProgress } from "@/lib/supabase";
 import { Task, UserTask, TaskFilter } from "@/types";
 import useUser from "./useUser";
 import { useToast } from "@/hooks/use-toast";
@@ -16,66 +16,57 @@ export const useTasks = () => {
   
   // Load tasks
   useEffect(() => {
-    const loadTasks = async () => {
-      if (!user) return;
+    loadTasks();
+  }, [user]);
+  
+  // Görevleri yükleme fonksiyonu
+  const loadTasks = async () => {
+    if (!user) return;
+    
+    try {
+      setIsLoading(true);
       
+      // Get all tasks from Supabase
       try {
-        setIsLoading(true);
-        
-        // Get all tasks using API endpoint instead of Firebase
-        try {
-          console.log("Trying to load tasks from API");
-          const response = await fetch("/api/tasks");
-          if (response.ok) {
-            const tasksData = await response.json();
-            console.log("Tasks loaded from API:", tasksData);
-            setTasks(tasksData);
-          } else {
-            console.warn("Failed to load tasks from API, falling back to Firebase");
-            // Fallback to Firebase
-            const allTasks = await getTasks();
-            setTasks(allTasks);
-          }
-        } catch (apiError) {
-          console.warn("API error loading tasks, falling back to Firebase:", apiError);
-          const allTasks = await getTasks();
-          setTasks(allTasks);
-        }
-        
-        // Get user's progress on tasks
-        try {
-          console.log("Trying to load user tasks from API");
-          const response = await fetch(`/api/users/${user.id}/tasks`);
-          if (response.ok) {
-            const userTasksData = await response.json();
-            console.log("User tasks loaded from API:", userTasksData);
-            setUserTasks(userTasksData);
-          } else {
-            console.warn("Failed to load user tasks from API, falling back to Firebase");
-            // Fallback to Firebase
-            const userTasksData = await getUserTasks(user.id);
-            setUserTasks(userTasksData);
-          }
-        } catch (apiError) {
-          console.warn("API error loading user tasks, falling back to Firebase:", apiError);
-          const userTasksData = await getUserTasks(user.id);
-          setUserTasks(userTasksData);
-        }
-        
+        console.log("Loading tasks from Supabase");
+        const tasksData = await getTasks();
+        console.log("Tasks loaded from Supabase:", tasksData);
+        setTasks(tasksData);
       } catch (error) {
-        console.error("Error loading tasks:", error);
+        console.error("Error loading tasks from Supabase:", error);
         toast({
           title: "Hata",
           description: "Görevler yüklenirken bir hata oluştu.",
           variant: "destructive"
         });
-      } finally {
-        setIsLoading(false);
       }
-    };
-    
-    loadTasks();
-  }, [user, toast]);
+      
+      // Get user's progress on tasks
+      try {
+        console.log("Loading user tasks from Supabase");
+        const userTasksData = await getUserTasks(user.id);
+        console.log("User tasks loaded from Supabase:", userTasksData);
+        setUserTasks(userTasksData);
+      } catch (error) {
+        console.error("Error loading user tasks from Supabase:", error);
+        toast({
+          title: "Hata",
+          description: "Kullanıcı görevleri yüklenirken bir hata oluştu.",
+          variant: "destructive"
+        });
+      }
+      
+    } catch (error) {
+      console.error("Error loading tasks:", error);
+      toast({
+        title: "Hata",
+        description: "Görevler yüklenirken bir hata oluştu.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   // Filter tasks based on active filter
   const filteredTasks = tasks.filter(task => {
@@ -100,37 +91,7 @@ export const useTasks = () => {
         case "open_app":
           // Auto-complete this task as the app is already open
           try {
-            console.log("Trying to update task progress via API");
-            const response = await fetch(`/api/users/${user.id}/tasks/${task.id}/progress`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ progress: task.requiredAmount }),
-            });
-            
-            if (response.ok) {
-              console.log("Task progress updated via API");
-              await refreshUser();
-              hapticFeedback("success");
-              toast({
-                title: "Görev Tamamlandı",
-                description: `${task.points} puan kazandınız!`,
-                variant: "default"
-              });
-            } else {
-              console.warn("Failed to update task progress via API, falling back to Firebase");
-              await updateUserTaskProgress(user.id, task.id, task.requiredAmount);
-              await refreshUser();
-              hapticFeedback("success");
-              toast({
-                title: "Görev Tamamlandı",
-                description: `${task.points} puan kazandınız!`,
-                variant: "default"
-              });
-            }
-          } catch (apiError) {
-            console.warn("API error updating task progress, falling back to Firebase:", apiError);
+            console.log("Handling open_app task");
             await updateUserTaskProgress(user.id, task.id, task.requiredAmount);
             await refreshUser();
             hapticFeedback("success");
@@ -139,38 +100,37 @@ export const useTasks = () => {
               description: `${task.points} puan kazandınız!`,
               variant: "default"
             });
+          } catch (error) {
+            console.error("Error updating task progress:", error);
+            toast({
+              title: "Hata",
+              description: "Görev güncellenirken bir hata oluştu.",
+              variant: "destructive"
+            });
           }
           break;
           
         case "send_message":
           if (task.telegramTarget) {
             try {
+              console.log("Handling send_message task");
               // Open the Telegram link and attempt to mark as complete
               openTelegramLink(task.telegramTarget);
               
               // Update task progress
-              try {
-                const response = await fetch(`/api/users/${user.id}/tasks/${task.id}/progress`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ progress: 1 }), // Increment by 1
-                });
-                
-                if (response.ok) {
-                  console.log(`Task progress updated for ${task.telegramAction}`);
-                  toast({
-                    title: "Görev İlerlemesi",
-                    description: "Görev ilerlemesi güncellendi.",
-                  });
-                  await refreshUser();
-                }
-              } catch (progressError) {
-                console.error("Error updating task progress:", progressError);
-              }
-            } catch (linkError) {
-              console.error("Error opening Telegram link:", linkError);
+              await updateUserTaskProgress(user.id, task.id, 1);
+              await refreshUser();
+              toast({
+                title: "Görev İlerlemesi",
+                description: "Görev ilerlemesi güncellendi.",
+              });
+            } catch (error) {
+              console.error("Error handling send_message task:", error);
+              toast({
+                title: "Hata",
+                description: "Görev işlenirken bir hata oluştu.",
+                variant: "destructive"
+              });
             }
           }
           break;
@@ -178,33 +138,25 @@ export const useTasks = () => {
         case "join_channel":
           if (task.telegramTarget) {
             try {
-              console.log("Opening channel link:", task.telegramTarget);
+              console.log("Handling join_channel task");
               
               // Open the Telegram link
               openTelegramLink(task.telegramTarget);
               
               // Mark task as complete
-              try {
-                // Complete the task directly
-                await fetch(`/api/users/${user.id}/tasks/${task.id}/progress`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ progress: task.requiredAmount }),
-                });
-                
-                toast({
-                  title: "Görev Tamamlanıyor",
-                  description: "Kanala katıldıktan sonra görev tamamlanacak",
-                });
-                
-                await refreshUser();
-              } catch (progressError) {
-                console.error("Error updating channel join task progress:", progressError);
-              }
-            } catch (linkError) {
-              console.error("Error opening Telegram channel link:", linkError);
+              await updateUserTaskProgress(user.id, task.id, task.requiredAmount);
+              await refreshUser();
+              toast({
+                title: "Görev Tamamlanıyor",
+                description: "Kanala katıldıktan sonra görev tamamlanacak",
+              });
+            } catch (error) {
+              console.error("Error handling join_channel task:", error);
+              toast({
+                title: "Hata",
+                description: "Görev işlenirken bir hata oluştu.",
+                variant: "destructive"
+              });
             }
           }
           break;
@@ -214,27 +166,40 @@ export const useTasks = () => {
           break;
           
         default:
-          console.warn(`Unknown task action: ${task.telegramAction}`);
+          // İlerleme tabanlı görevler için (telegramAction olmayan veya özel olmayan görevler)
+          try {
+            console.log("Handling progress-based task");
+            // Bir birim ilerleme kaydedelim
+            const result = await incrementTaskProgress(parseInt(task.id, 10), 1);
+            console.log("Task progress result:", result);
+            toast({
+              title: "İlerleme Kaydedildi",
+              description: "Görev ilerlemesi güncellendi.",
+            });
+            
+            // Eğer görev tamamlandıysa kullanıcıyı güncelleyelim
+            if (result && result.isCompleted) {
+              console.log("Task completed, refreshing user");
+              await refreshUser();
+              toast({
+                title: "Görev Tamamlandı",
+                description: `${task.points} puan kazandınız!`,
+                variant: "default"
+              });
+            }
+          } catch (error) {
+            console.error("Error handling progress task:", error);
+            toast({
+              title: "Hata",
+              description: "Görev ilerlemesi kaydedilirken bir hata oluştu.",
+              variant: "destructive"
+            });
+          }
+          break;
       }
       
       // Update user tasks after task action
-      try {
-        console.log("Trying to reload user tasks from API after action");
-        const response = await fetch(`/api/users/${user.id}/tasks`);
-        if (response.ok) {
-          const userTasksData = await response.json();
-          console.log("User tasks reloaded from API:", userTasksData);
-          setUserTasks(userTasksData);
-        } else {
-          console.warn("Failed to reload user tasks from API, falling back to Firebase");
-          const updatedUserTasks = await getUserTasks(user.id);
-          setUserTasks(updatedUserTasks);
-        }
-      } catch (apiError) {
-        console.warn("API error reloading user tasks, falling back to Firebase:", apiError);
-        const updatedUserTasks = await getUserTasks(user.id);
-        setUserTasks(updatedUserTasks);
-      }
+      await loadTasks();
       
     } catch (error) {
       console.error("Error handling task action:", error);
@@ -246,19 +211,55 @@ export const useTasks = () => {
     }
   };
   
+  // İlerleme tabanlı görevler için ilerleme arttırma
+  const incrementTaskProgress = async (taskId: string | number, amount: number = 1) => {
+    if (!user) return;
+    
+    try {
+      const taskIdStr = typeof taskId === 'number' ? taskId.toString() : taskId;
+      console.log(`Incrementing task ${taskIdStr} for user ${user.id}, amount: ${amount}`);
+      
+      const result = await incrementUserTaskProgress(user.id, taskIdStr, amount);
+      
+      // Kullanıcı görevlerini yenile
+      await loadTasks();
+      
+      // Eğer görev tamamlandıysa kullanıcıyı bilgilendir
+      if (result && result.isCompleted) {
+        const task = tasks.find(t => t.id === taskIdStr);
+        if (task) {
+          hapticFeedback("success");
+          toast({
+            title: "Görev Tamamlandı",
+            description: `${task.points} puan kazandınız!`,
+            variant: "default"
+          });
+          await refreshUser();
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error("Error incrementing task progress:", error);
+      toast({
+        title: "Hata",
+        description: "Görev ilerlemesi güncellenirken bir hata oluştu.",
+        variant: "destructive"
+      });
+      return null;
+    }
+  };
+  
   // Update task progress
   const updateTaskProgress = async (taskId: string, progress: number) => {
     if (!user) return;
     
     try {
       await updateUserTaskProgress(user.id, taskId, progress);
-      
-      // Refresh user tasks
-      const updatedUserTasks = await getUserTasks(user.id);
-      setUserTasks(updatedUserTasks);
-      
-      // Refresh user data for updated points
       await refreshUser();
+      
+      // Reload user tasks
+      await loadTasks();
       
     } catch (error) {
       console.error("Error updating task progress:", error);
@@ -278,7 +279,9 @@ export const useTasks = () => {
     setActiveFilter,
     getUserTaskProgress,
     handleTaskAction,
-    updateTaskProgress
+    updateTaskProgress,
+    incrementTaskProgress,
+    loadTasks
   };
 };
 

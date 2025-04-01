@@ -3,6 +3,7 @@ import useTasks from "@/hooks/useTasks";
 import { Task, UserTask, TaskFilter } from "@/types";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { TelegramButton } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const TasksList: React.FC = () => {
@@ -35,11 +36,30 @@ const TasksList: React.FC = () => {
     const taskTypeStyles: Record<string, { bg: string, text: string }> = {
       daily: { bg: "blue-500/20", text: "blue-400" },
       weekly: { bg: "purple-500/20", text: "purple-400" },
+      social: { bg: "green-500/20", text: "green-400" },
+      referral: { bg: "pink-500/20", text: "pink-400" },
+      milestone: { bg: "indigo-500/20", text: "indigo-400" },
       special: { bg: "yellow-500/20", text: "yellow-400" }
     };
     
     const typeStyle = taskTypeStyles[task.type] || taskTypeStyles.daily;
     
+    // Görev türünün Türkçe karşılığı
+    const getTaskTypeLabel = (type: string) => {
+      switch (type) {
+        case 'daily': return 'Günlük';
+        case 'weekly': return 'Haftalık';
+        case 'social': return 'Sosyal';
+        case 'referral': return 'Davet';
+        case 'milestone': return 'Kilometre Taşı';
+        case 'special': return 'Özel';
+        default: return type;
+      }
+    };
+
+    // Telegram bağlantılı görev mi kontrol et
+    const isTelegramTask = task.telegramAction && ['join_channel', 'send_message', 'invite_friends'].includes(task.telegramAction);
+
     return (
       <div 
         key={task.id} 
@@ -49,7 +69,7 @@ const TasksList: React.FC = () => {
           <div>
             <div className="flex items-center">
               <span className={`text-xs bg-${typeStyle.bg} text-${typeStyle.text} px-2 py-0.5 rounded mr-2`}>
-                {task.type === 'daily' ? 'Günlük' : task.type === 'weekly' ? 'Haftalık' : 'Özel'}
+                {getTaskTypeLabel(task.type)}
               </span>
               <h3 className="font-medium">{task.title}</h3>
               {isCompleted && <i className="ri-check-double-line ml-2 text-green-400"></i>}
@@ -80,15 +100,22 @@ const TasksList: React.FC = () => {
             Ödül Alındı
           </div>
         ) : (
-          <Button
-            className={`mt-3 w-full py-2 bg-${typeStyle.bg} hover:bg-${typeStyle.text}/30 text-${typeStyle.text} rounded-lg text-sm transition`}
-            onClick={() => handleTaskAction(task)}
-          >
-            {task.telegramAction === 'join_channel' ? 'Kanala Katıl' :
-              task.telegramAction === 'send_message' ? 'Göreve Git' :
-              task.telegramAction === 'invite_friends' ? 'Davet Linki Paylaş' :
-              'Görevi Tamamla'}
-          </Button>
+          isTelegramTask ? (
+            <TelegramButton
+              className="mt-3 w-full py-2 rounded-lg text-sm transition"
+              telegramAction={task.telegramAction || undefined}
+              telegramTarget={task.telegramTarget || undefined}
+              variant={task.type === 'social' ? 'social' : task.type === 'referral' ? 'referral' : 'telegram'}
+              onClick={() => handleTaskAction(task)}
+            />
+          ) : (
+            <Button
+              className={`mt-3 w-full py-2 bg-${typeStyle.bg} hover:bg-${typeStyle.text}/30 text-${typeStyle.text} rounded-lg text-sm transition`}
+              onClick={() => handleTaskAction(task)}
+            >
+              Görevi Tamamla
+            </Button>
+          )
         )}
       </div>
     );
@@ -117,6 +144,24 @@ const TasksList: React.FC = () => {
           onClick={() => changeFilter('weekly')}
         >
           Haftalık
+        </button>
+        <button 
+          className={`${activeFilter === 'social' ? 'bg-primary text-white' : 'bg-dark-lighter text-gray-300'} px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap`}
+          onClick={() => changeFilter('social')}
+        >
+          Sosyal
+        </button>
+        <button 
+          className={`${activeFilter === 'referral' ? 'bg-primary text-white' : 'bg-dark-lighter text-gray-300'} px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap`}
+          onClick={() => changeFilter('referral')}
+        >
+          Davet
+        </button>
+        <button 
+          className={`${activeFilter === 'milestone' ? 'bg-primary text-white' : 'bg-dark-lighter text-gray-300'} px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap`}
+          onClick={() => changeFilter('milestone')}
+        >
+          Kilometre Taşı
         </button>
         <button 
           className={`${activeFilter === 'special' ? 'bg-primary text-white' : 'bg-dark-lighter text-gray-300'} px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap`}

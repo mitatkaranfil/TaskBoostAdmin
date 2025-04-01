@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import useUser from "@/hooks/useUser";
-import { getUserReferrals } from "@/lib/firebase";
+import { getReferrals } from "@/lib/supabase";
 import { formatDate, formatPoints, formatTimeSinceJoin } from "@/lib/mining";
 import { Referral } from "@/types";
 import { shareWithTelegram, showAlert, hapticFeedback } from "@/lib/telegram";
@@ -19,7 +19,7 @@ const Profile: React.FC = () => {
       
       try {
         setIsLoading(true);
-        const referralsData = await getUserReferrals(user.id);
+        const referralsData = await getReferrals(user.id);
         setReferrals(referralsData);
       } catch (error) {
         console.error("Error loading referrals:", error);
@@ -78,18 +78,18 @@ const Profile: React.FC = () => {
             {user.photoUrl ? (
               <img 
                 src={user.photoUrl} 
-                alt={`${user.firstName}'s Avatar`}
+                alt={`${user.firstName || 'User'}'s Avatar`}
                 className="w-16 h-16 rounded-full mr-4" 
               />
             ) : (
               <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mr-4">
                 <span className="text-primary font-medium text-xl">
-                  {user.firstName.charAt(0)}
+                  {user?.firstName ? user.firstName.charAt(0) : '?'}
                 </span>
               </div>
             )}
             <div>
-              <h3 className="font-semibold text-lg">{user.firstName}</h3>
+              <h3 className="font-semibold text-lg">{user.firstName || 'User'}</h3>
               <div className="text-gray-400">ID: <span>{user.telegramId}</span></div>
               <div className="flex items-center mt-1">
                 <i className="ri-vip-crown-fill mr-1 text-secondary"></i>
@@ -195,18 +195,18 @@ const Profile: React.FC = () => {
                     {referral.referred?.photoUrl ? (
                       <img 
                         src={referral.referred.photoUrl} 
-                        alt={referral.referred.firstName} 
+                        alt={referral.referred?.firstName || 'User'} 
                         className="w-8 h-8 rounded-full mr-2" 
                       />
                     ) : (
                       <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center mr-2">
                         <span className="text-primary text-xs">
-                          {referral.referred?.firstName.charAt(0)}
+                          {referral.referred?.firstName?.charAt(0) || '?'}
                         </span>
                       </div>
                     )}
                     <div>
-                      <div className="font-medium">{referral.referred?.firstName}</div>
+                      <div className="font-medium">{referral.referred?.firstName || 'Unknown User'}</div>
                       <div className="text-xs text-gray-400">
                         {formatTimeSinceJoin(referral.createdAt as Date)}
                       </div>

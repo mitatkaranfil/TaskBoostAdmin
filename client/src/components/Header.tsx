@@ -13,18 +13,18 @@ const Header: React.FC = () => {
           {user.photoUrl ? (
             <img
               src={user.photoUrl}
-              alt={`${user.firstName}'s Avatar`}
+              alt={`${user.firstName || 'User'}'s Avatar`}
               className="w-10 h-10 rounded-full mr-3"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center mr-3">
               <span className="text-primary font-medium">
-                {user.firstName.charAt(0)}
+                {user?.firstName ? user.firstName.charAt(0) : '?'}
               </span>
             </div>
           )}
           <div>
-            <h2 className="font-semibold">{user.firstName}</h2>
+            <h2 className="font-semibold">{user.firstName || 'User'}</h2>
             <div className="text-xs text-gray-400">
               ID: <span>{user.telegramId}</span>
             </div>
